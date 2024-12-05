@@ -1,0 +1,4 @@
+pandas>=2.0.0
+biopython>=1.84
+tqdm>=2.0.0
+matplotlib>=3.0.0

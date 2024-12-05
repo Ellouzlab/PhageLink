@@ -1,0 +1,19 @@
+Metadata-Version: 2.1
+Name: PhageLink
+Version: 0.0.0
+Summary: A program to classify Caudoviricetes
+Author-email: Muhammad Sulman <sulmanmu40@gmail.com>
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: pandas>=2.0.0
+Requires-Dist: biopython>=1.84
+Requires-Dist: tqdm>=2.0.0
+Requires-Dist: matplotlib>=3.0.0
+Requires-Dist: numpy>=1.21.0
+Requires-Dist: torch-geometric>=2.3.0
+Requires-Dist: scikit-learn>=1.0.0
+Requires-Dist: torch-sparse>=0.6.15
+Requires-Dist: torch-cluster>=1.6.0
+Requires-Dist: torch-spline-conv>=1.2.1
+
+Please WORKKKK!!!!

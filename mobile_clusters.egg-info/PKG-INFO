@@ -1,0 +1,13 @@
+Metadata-Version: 2.1
+Name: mobile_clusters
+Version: 0.0.0
+Summary: A program to classify Caudoviricetes
+Author-email: Muhammad Sulman <sulmanmu40@gmail.com>
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: pandas>=2.0.0
+Requires-Dist: biopython>=1.84
+Requires-Dist: tqdm>=2.0.0
+Requires-Dist: matplotlib>=3.0.0
+
+Please WORKKKK!!!!
