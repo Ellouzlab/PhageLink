@@ -3,9 +3,13 @@ import os
 import subprocess
 import pandas as pd
 import numpy as np
+from multiprocessing import Pool
+from functools import partial
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio import AlignIO
+from scipy.stats import hypergeom
+from scipy.sparse import csr_matrix
 from Bio.Phylo.TreeConstruction import DistanceCalculator
 from PhageLink.utils import running_message, run_command, read_fasta
 
@@ -190,13 +194,15 @@ def combine_distance_matrices(
     output_dir: str
 ):
     '''
-    Combine all individual distance matrices into a single comprehensive weighted adjacency matrix.
-    '''
-    import os
-    import pandas as pd
-    import numpy as np
-    from functools import reduce
+    Combine all individual distance matrices into a single comprehensive weighted adjacency matrix
+    using a fully vectorized approach.
 
+    Steps:
+    1. Identify the union of all nodes from all distance matrices.
+    2. Reindex each matrix to a consistent node set, filling missing values with NaN.
+    3. Stack these matrices into a 3D array and compute the average distance using nanmean.
+    4. Convert distances to weights, save the combined distance and weight matrices.
+    '''
     combined_distance_file = os.path.join(output_dir, 'combined_distance_matrix.tsv')
     weighted_adjacency_matrix_file = os.path.join(output_dir, 'weighted_adjacency_matrix.tsv')
 
@@ -213,105 +219,160 @@ def combine_distance_matrices(
         logging.warning("No distance matrices found to combine.")
         return
 
-    # Initialize a list to hold DataFrames
-    distance_dfs = []
-
+    # Step 1: Identify the union of all nodes
+    all_nodes = set()
     for file in distance_files:
-        # Read the distance matrix into a DataFrame
         df = pd.read_csv(file, sep='\t', index_col=0)
-        distance_dfs.append(df)
+        # Ensure consistent node names as strings
+        df.index = df.index.astype(str)
+        df.columns = df.columns.astype(str)
+        # Update global set of nodes
+        all_nodes.update(df.index)
 
-    # Align all DataFrames on rows and columns
-    sum_distances = reduce(lambda x, y: x.add(y, fill_value=0), distance_dfs)
-    counts = reduce(lambda x, y: x.add(~y.isna(), fill_value=0), distance_dfs)
+    all_nodes = sorted(all_nodes)
+    N = len(all_nodes)
 
-    # avoid division by zero
-    counts.replace(0, np.nan, inplace=True)
+    # Step 2: Reindex each matrix to the full set of nodes, fill missing with NaN
+    # We'll store reindexed DataFrames in a list
+    reindexed_dfs = []
+    for file in distance_files:
+        df = pd.read_csv(file, sep='\t', index_col=0)
+        df.index = df.index.astype(str)
+        df.columns = df.columns.astype(str)
+        # Reindex rows and columns
+        df = df.reindex(index=all_nodes, columns=all_nodes)
+        # DataFrames are now N x N with NaN where missing
+        reindexed_dfs.append(df)
 
-    # Compute average distances
-    average_distance = sum_distances.divide(counts)
+    # Step 3: Stack these matrices into a 3D array
+    # Convert each DataFrame to a numpy array and stack
+    # shape: (number_of_matrices, N, N)
+    arr_3d = np.stack([df.values for df in reindexed_dfs], axis=0)
 
-    # Replace NaN values
-    average_distance = average_distance.fillna(1.0)
+    # Step 4: Compute average distance using nanmean
+    # nanmean will handle NaNs by ignoring them
+    avg_distance = np.nanmean(arr_3d, axis=0)  # shape: (N, N)
 
-    average_distance.to_csv(combined_distance_file, sep='\t')
+    # If there were positions with all NaN, nanmean will result in NaN there.
+    # Replace any remaining NaN with a default distance of 1.0
+    np.nan_to_num(avg_distance, nan=1.0, copy=False)
+
+    # Save combined distance matrix
+    avg_distance_df = pd.DataFrame(avg_distance, index=all_nodes, columns=all_nodes)
+    avg_distance_df.to_csv(combined_distance_file, sep='\t')
     logging.info(f"Combined distance matrix saved to {combined_distance_file}")
 
-    weights = 1 - average_distance
-    weights = weights.clip(lower=0.0, upper=1.0)
+    # Convert distances to weights: weight = 1 - distance
+    weights = 1 - avg_distance
+    # Clip to [0,1]
+    np.clip(weights, 0.0, 1.0, out=weights)
 
-    # no self loops
-    np.fill_diagonal(weights.values, 0)
+    # No self loops
+    np.fill_diagonal(weights, 0)
 
-    weights.to_csv(weighted_adjacency_matrix_file, sep='\t')
+    weights_df = pd.DataFrame(weights, index=all_nodes, columns=all_nodes)
+    weights_df.to_csv(weighted_adjacency_matrix_file, sep='\t')
     logging.info(f"Combined weighted adjacency matrix saved to {weighted_adjacency_matrix_file}")
 
 
-def calculate_hypergeometric_adjacency(
-    presence_absence: pd.DataFrame,
-    output_dir: str,
-    p_value_threshold: float = 0.05
-):
-    '''
-    Calculate a binary adjacency matrix from the presence-absence matrix using the hypergeometric distribution.
-    '''
-    import os
-    import pandas as pd
-    import numpy as np
-    import torch
 
+
+def compute_pvals_chunk(chunk_indices, M, N, n, k):
+    local_pvals = np.ones_like(chunk_indices, dtype=float)
+    for i, idx in enumerate(chunk_indices):
+        # hypergeom.sf(k-1, M, N, n)
+        local_pvals[i] = hypergeom.sf(k[idx] - 1, M, N[idx], n[idx])
+    return local_pvals
+
+def calculate_hypergeometric_adjacency(presence_absence: pd.DataFrame, 
+                                       output_dir: str, 
+                                       p_value_threshold: float = 0.05,
+                                       min_gene_count: int = 1,
+                                       threads: int = 1):
     adjacency_matrix_file = os.path.join(output_dir, 'hypergeometric_adjacency_matrix.tsv')
 
-    # Check if the adjacency matrix already exists
     if os.path.exists(adjacency_matrix_file):
         logging.info("Hypergeometric adjacency matrix already exists. Skipping recomputation.")
         return
 
-    logging.info("Calculating hypergeometric adjacency matrix from presence-absence matrix using PyTorch")
+    logging.info("Calculating hypergeometric adjacency matrix from presence-absence matrix.")
 
-    # Set up device for PyTorch (use GPU if available)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    logging.info(f"Using device: {device}")
-
-    M = presence_absence.shape[1]
+    # Optional: Filter out subjects with very low gene counts (if desired)
     subject_gene_counts = presence_absence.sum(axis=1)
-    subjects = presence_absence.index.tolist()
+    filtered_presence_absence = presence_absence.loc[subject_gene_counts >= min_gene_count]
+    if len(filtered_presence_absence) < len(presence_absence):
+        logging.info(f"Filtered subjects from {len(presence_absence)} to {len(filtered_presence_absence)} based on min_gene_count={min_gene_count}.")
+    presence_absence = filtered_presence_absence
 
-    pa_tensor = torch.tensor(presence_absence.values, dtype=torch.float32, device=device)
-    gene_counts = torch.tensor(subject_gene_counts.values, dtype=torch.float32, device=device)
-    shared_gene_counts = torch.mm(pa_tensor, pa_tensor.t())
+    M = presence_absence.shape[1]  # Total number of genes
+    gene_counts = presence_absence.sum(axis=1).values
+    subjects = presence_absence.index
+    num_subjects = len(subjects)
 
-    # Prepare parameters for hypergeometric distribution
-    M_tensor = torch.tensor(M, dtype=torch.float32, device=device)
-    n = gene_counts.unsqueeze(1)
-    N = gene_counts.unsqueeze(0)
-    k = shared_gene_counts
+    # Convert to sparse for efficient multiplication if large and sparse
+    presence_absence_sparse = csr_matrix(presence_absence.values)
 
-    def log_binom(a, b):
-        return torch.lgamma(a + 1) - torch.lgamma(b + 1) - torch.lgamma(a - b + 1)
+    # Compute shared gene counts using sparse multiplication
+    shared_gene_counts = (presence_absence_sparse.dot(presence_absence_sparse.T)).toarray()
 
-    mean = N * n / M_tensor
-    std = torch.sqrt(N * n * (M_tensor - n) * (M_tensor - N) / (M_tensor**2 * (M_tensor - 1) + 1e-10))
+    # Get upper triangular indices
+    triu_indices = np.triu_indices(num_subjects, k=1)
+    i_idx, j_idx = triu_indices
 
-    # Compute z-scores
-    z = (k - mean) / (std + 1e-10)
+    N = gene_counts[i_idx]  # gene count for subject i
+    n = gene_counts[j_idx]  # gene count for subject j
+    k = shared_gene_counts[i_idx, j_idx]
 
-    # Compute p-values using the normal distribution's survival function
-    from torch.distributions import Normal
-    normal_dist = Normal(0, 1)
-    p_vals = 1 - normal_dist.cdf(z)
+    # Pre-allocate p_vals array for efficiency
+    p_vals = np.ones_like(k, dtype=float)
 
-    # Set diagonal to zero
-    p_vals.fill_diagonal_(0)
-    adjacency_matrix = (p_vals <= p_value_threshold).int()
+    nonzero_mask = (k > 0)
 
-    # Move tensor back to CPU and convert to numpy
-    adjacency_matrix_cpu = adjacency_matrix.cpu().numpy()
+    # If no nonzero k, just save a zero adjacency
+    if not np.any(nonzero_mask):
+        logging.info("No shared genes found. Adjacency matrix will be empty.")
+        weights = np.zeros((num_subjects, num_subjects))
+        adjacency_df = pd.DataFrame(weights, index=subjects, columns=subjects)
+        adjacency_df.to_csv(adjacency_matrix_file, sep='\t')
+        return
 
-    adjacency_df = pd.DataFrame(adjacency_matrix_cpu, index=subjects, columns=subjects)
+    indices_to_compute = np.where(nonzero_mask)[0]
+
+    # Determine chunk size
+    chunk_size = max(1, len(indices_to_compute) // (threads * 4))
+    chunks = [indices_to_compute[i:i+chunk_size] for i in range(0, len(indices_to_compute), chunk_size)]
+
+    # Prepare partial function with fixed parameters
+    worker_func = partial(compute_pvals_chunk, M=M, N=N, n=n, k=k)
+
+    if threads > 1:
+        with Pool(processes=threads) as pool:
+            results = pool.map(worker_func, chunks)
+        combined_pvals = np.concatenate(results)
+    else:
+        # Single-threaded fallback
+        combined_pvals = compute_pvals_chunk(indices_to_compute, M, N, n, k)
+
+    # Assign computed p-values back
+    p_vals[indices_to_compute] = combined_pvals
+
+    # Apply significance threshold
+    significant_mask = (p_vals <= p_value_threshold)
+    epsilon = 1e-15
+    weights_upper = np.zeros_like(p_vals)
+    weights_upper[significant_mask] = -np.log(p_vals[significant_mask] + epsilon)
+
+    # Construct the full adjacency (weight) matrix
+    weights = np.zeros((num_subjects, num_subjects))
+    weights[i_idx, j_idx] = weights_upper
+    weights[j_idx, i_idx] = weights_upper  # symmetric
+
+    # No self loops
+    np.fill_diagonal(weights, 0)
+
+    adjacency_df = pd.DataFrame(weights, index=subjects, columns=subjects)
     adjacency_df.to_csv(adjacency_matrix_file, sep='\t')
-    logging.info(f"Hypergeometric adjacency matrix saved to {adjacency_matrix_file}")
-
+    logging.info(f"Hypergeometric weighted adjacency matrix saved to {adjacency_matrix_file}")
 
 def Prepare_data(
     seqs: str,
@@ -320,10 +381,33 @@ def Prepare_data(
     output: str,
     threads: int,
     memory: str,
-    p_value_threshold: float = 0.05
+    p_value_threshold: float = 0.05,
+    min_occurrence: int = 2
 ):
     '''
     Prepare the data for training and generate necessary matrices.
+    
+    Parameters
+    ----------
+    seqs : str
+        Path to the input nucleotide sequences.
+    map_bitscore_threshold : int
+        Bitscore threshold for filtering mmseqs search hits.
+    reference_data : str
+        Path to the directory containing reference VOG database files.
+    output : str
+        Output directory where results will be stored.
+    threads : int
+        Number of threads for parallel operations.
+    memory : str
+        Memory limit for mmseqs (e.g., "4G").
+    p_value_threshold : float, optional
+        p-value threshold for the hypergeometric test, by default 0.05.
+    min_occurrence : int, optional
+        Minimum number of genomes a gene must be present in to be included.
+        - If set to 1, genes present in no genomes (sum=0) are excluded.
+        - If set to 2, genes present in only one genome (sum=1) are also excluded.
+        Default is 1.
     '''
     logging.info("Preparing the data")
     vogdb_faa_path = f"{reference_data}/vogdb_merged.faa"
@@ -346,12 +430,23 @@ def Prepare_data(
 
     pres_abs_path = f"{output}/presence_absence.tsv"
 
+    # Filter hits by bitscore threshold and keep best hits per (query, target) pair
     filtered_df = search_df[search_df["bitscore"] >= map_bitscore_threshold]
     filtered_df = filtered_df.sort_values(by=["query", "target", "bitscore"], ascending=[True, True, False])
     filtered_df = filtered_df.drop_duplicates(subset=["query", "target"], keep="first")
 
     # Generate the presence-absence table
     presence_absence = pd.crosstab(filtered_df["target"], filtered_df["query"])
+
+    # Exclude genes (columns) not meeting the minimum occurrence criterion
+    # Calculate column sums (each column is a gene presence vector)
+    col_sums = presence_absence.sum(axis=0)
+    # Keep only those columns where sum >= min_occurrence
+    presence_absence = presence_absence.loc[:, col_sums >= min_occurrence]
+
+    # If min_occurrence=1, this removes genes with sum=0 (no presence).
+    # If min_occurrence=2, this also removes genes with sum=1 (singletons).
+
     presence_absence.to_csv(pres_abs_path, sep='\t')
     logging.info(f"Presence-absence table saved to {pres_abs_path}")
 
@@ -367,7 +462,7 @@ def Prepare_data(
             hallmark_genes = [line.strip() for line in f]
         logging.info(f"Hallmark genes loaded from {hallmark_genes_file}")
 
-    #Extract sequences for each hallmark gene
+    # Extract sequences for each hallmark gene
     extract_and_align_hallmark_genes(
         hallmark_genes,
         filtered_df,
@@ -383,9 +478,10 @@ def Prepare_data(
         output_dir=output
     )
 
-    #Calculate binary hypergeometric adjacency matrix
+    # Calculate binary hypergeometric adjacency matrix
     calculate_hypergeometric_adjacency(
         presence_absence=presence_absence,
         output_dir=output,
-        p_value_threshold=p_value_threshold
+        p_value_threshold=p_value_threshold,
+        threads=threads
     )
