@@ -38,7 +38,7 @@ The following will run tests
 ```
 PhageLink train \
 --csv path_to_csv_in_downloaded_data \
---seqs path_to_csv_in_downloaded_data \
+--seqs path_to_sequence_fasta_in_downloaded_data \
 --reference_data path_to_unzipped_reference_data
 
 ```
@@ -48,3 +48,6 @@ Currently only the train module is setup. If you need more instructions type the
 PhageLink train -h
 ```
 
+### Considerations
+
+Currently this program only works on linux with cuda. I will fix this later.
