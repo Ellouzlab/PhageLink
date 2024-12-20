@@ -1,0 +1,72 @@
+2024-12-19 10:20:02,150 - INFO - Reading hypergeometric adjacency matrix
+2024-12-19 10:20:04,013 - INFO - Reading weighted adjacency matrix
+2024-12-19 10:20:05,557 - INFO - Done reading matrices
+2024-12-19 10:20:53,448 - INFO - Loaded gene presence-absence matrix.
+2024-12-19 10:20:53,451 - INFO - Number of genomes after intersection: 5086
+2024-12-19 10:20:53,723 - INFO - Presence-absence matrix subset to 5086 genomes.
+2024-12-19 10:20:53,723 - INFO - Loading original taxonomy data to extract 'Family' and 'Genus' labels.
+2024-12-19 10:20:53,730 - INFO - Extracted 'Family' and 'Genus' labels.
+2024-12-19 10:20:54,795 - INFO - Aligning data across all matrices and labels.
+2024-12-19 10:20:54,798 - INFO - Found 5086 shared indices across all datasets.
+2024-12-19 10:20:55,551 - INFO - Starting memory-optimized training setup.
+2024-12-19 10:20:55,551 - INFO - Preparing training tensors.
+2024-12-19 10:20:55,817 - INFO - Shared indices across matrices: 5086
+2024-12-19 10:21:03,583 - INFO - Filtered edge features tensor created with two-dimensional attributes.
+2024-12-19 10:21:06,823 - INFO - Link types tensor created.
+2024-12-19 10:21:07,130 - INFO - Number of links for each class after sampling: {np.float32(1.0): np.int64(331316), np.float32(2.0): np.int64(262598), np.float32(3.0): np.int64(92666)}
+2024-12-19 10:21:09,675 - INFO - Data split into train, validation, and test sets.
+2024-12-19 10:21:09,675 - INFO - Epoch 1/10 - Training...
+2024-12-19 10:21:51,203 - INFO - Epoch 1/10, Loss: 519.3396
+2024-12-19 10:21:51,203 - INFO - Evaluating Validation...
+2024-12-19 10:21:52,923 - INFO - Epoch 1/10, Validation Accuracy: 0.6468
+2024-12-19 10:21:52,923 - INFO - Epoch 2/10 - Training...
+2024-12-19 10:22:34,289 - INFO - Epoch 2/10, Loss: 396.1707
+2024-12-19 10:22:34,289 - INFO - Evaluating Validation...
+2024-12-19 10:22:36,002 - INFO - Epoch 2/10, Validation Accuracy: 0.7767
+2024-12-19 10:22:36,003 - INFO - Epoch 3/10 - Training...
+2024-12-19 10:23:17,383 - INFO - Epoch 3/10, Loss: 356.4499
+2024-12-19 10:23:17,383 - INFO - Evaluating Validation...
+2024-12-19 10:23:19,093 - INFO - Epoch 3/10, Validation Accuracy: 0.8072
+2024-12-19 10:23:19,093 - INFO - Epoch 4/10 - Training...
+2024-12-19 10:24:00,437 - INFO - Epoch 4/10, Loss: 332.9126
+2024-12-19 10:24:00,437 - INFO - Evaluating Validation...
+2024-12-19 10:24:02,149 - INFO - Epoch 4/10, Validation Accuracy: 0.8216
+2024-12-19 10:24:02,149 - INFO - Epoch 5/10 - Training...
+2024-12-19 10:24:43,549 - INFO - Epoch 5/10, Loss: 325.1988
+2024-12-19 10:24:43,549 - INFO - Evaluating Validation...
+2024-12-19 10:24:45,262 - INFO - Epoch 5/10, Validation Accuracy: 0.8334
+2024-12-19 10:24:45,262 - INFO - Epoch 6/10 - Training...
+2024-12-19 10:25:26,848 - INFO - Epoch 6/10, Loss: 319.4393
+2024-12-19 10:25:26,848 - INFO - Evaluating Validation...
+2024-12-19 10:25:28,565 - INFO - Epoch 6/10, Validation Accuracy: 0.8524
+2024-12-19 10:25:28,565 - INFO - Epoch 7/10 - Training...
+2024-12-19 10:26:09,915 - INFO - Epoch 7/10, Loss: 325.1447
+2024-12-19 10:26:09,915 - INFO - Evaluating Validation...
+2024-12-19 10:26:11,629 - INFO - Epoch 7/10, Validation Accuracy: 0.8420
+2024-12-19 10:26:11,630 - INFO - Epoch 8/10 - Training...
+2024-12-19 10:26:53,600 - INFO - Epoch 8/10, Loss: 323.9383
+2024-12-19 10:26:53,600 - INFO - Evaluating Validation...
+2024-12-19 10:26:55,314 - INFO - Epoch 8/10, Validation Accuracy: 0.8569
+2024-12-19 10:26:55,314 - INFO - Epoch 9/10 - Training...
+2024-12-19 10:27:36,988 - INFO - Epoch 9/10, Loss: 316.0232
+2024-12-19 10:27:36,988 - INFO - Evaluating Validation...
+2024-12-19 10:27:38,695 - INFO - Epoch 9/10, Validation Accuracy: 0.8252
+2024-12-19 10:27:38,696 - INFO - Epoch 10/10 - Training...
+2024-12-19 10:28:20,010 - INFO - Epoch 10/10, Loss: 312.0944
+2024-12-19 10:28:20,010 - INFO - Evaluating Validation...
+2024-12-19 10:28:21,719 - INFO - Epoch 10/10, Validation Accuracy: 0.8511
+2024-12-19 10:28:22,121 - INFO - Evaluating Test...
+2024-12-19 10:28:23,885 - INFO - Test Class-Specific Metrics:
+2024-12-19 10:28:23,885 - INFO - Class 1: Precision=0.8623, Recall=0.9345, F1-Score=0.8969
+2024-12-19 10:28:23,885 - INFO - Class 2: Precision=0.8493, Recall=0.8018, F1-Score=0.8249
+2024-12-19 10:28:23,885 - INFO - Class 3: Precision=0.8153, Recall=0.7023, F1-Score=0.7546
+2024-12-19 10:28:23,885 - INFO - Final Test Accuracy: 0.8521
+2024-12-19 10:28:23,885 - INFO - Final Test Class-Specific Metrics:
+2024-12-19 10:28:23,885 - INFO - Class 1: Precision=0.8623, Recall=0.9345, F1-Score=0.8969
+2024-12-19 10:28:23,885 - INFO - Class 2: Precision=0.8493, Recall=0.8018, F1-Score=0.8249
+2024-12-19 10:28:23,885 - INFO - Class 3: Precision=0.8153, Recall=0.7023, F1-Score=0.7546
+2024-12-19 10:28:23,989 - INFO - Confusion matrix saved.
+2024-12-19 10:28:24,611 - INFO - Starting forward pass visualization.
+2024-12-19 10:28:30,790 - INFO - t-SNE visualization saved at Data/output/forward_tsne.png
+2024-12-19 10:28:31,007 - INFO - Family label propagation accuracy: 0.8556, recall: 0.8421
+2024-12-19 10:28:31,007 - INFO - Genus label propagation accuracy: 0.2095, recall: 0.2091
