@@ -51,3 +51,4 @@ def check_repeats(arguments):
     if duplicates:
         print(f"Error: Duplicate sequence IDs found in {vogdb_path}: {duplicates}")
         sys.exit(1)
+        
