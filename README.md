@@ -22,7 +22,7 @@ mamba env create -n PhageLink --file env.yml
 
 5. Install PhageLink
 ```
-pip install -e .
+python -m pip install -e .
 ```
 
 ### Download Databases
